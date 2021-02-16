@@ -43,25 +43,36 @@ class BibleGatewayAPI {
 
     const document = this.parse(result.data);
 
-    const searchRef = document.querySelector(".bcv").textContent;
+    const searchRef = document.querySelector(".dropdown-display-text").textContent;
 
     // Get span text elements
     let elements = document.querySelectorAll("p > span");
     //verse += JSON.stringify(elements)
 
     let verses : Array<BibleVerseResult> = new Array<BibleVerseResult>();
+    let chapterNumber;
+
+    let verseNumber = 1;
+
     // Iterate over the verses
     for (let i = 0; i < elements.length; i++) {
       let textElement = elements[i];
 
-      let verseNumber;
+      let oldVerseNumber = verseNumber;
+
       // Remove cross refs and footnotes from the results
       // Need to remove footnotes from woj class also but that dosent make sense as it seems cross refs are the only ones working -seems like footnotes are the ones that are not removing properly
-      let crossRefs = textElement.querySelectorAll("sup.crossreference, sup.footnote, sup.versenum");
+      let crossRefs = textElement.querySelectorAll("sup.crossreference, sup.footnote, sup.versenum, span.chapternum");
       for (let ci = 0; ci < crossRefs.length; ci++) {
         let refToRemove = crossRefs[ci];
+        if (refToRemove.classList.contains("chapternum")) {
+          // Reset the verse to 1 as we are in a new chapter
+          // Will be overridden in next step if this is incorrect
+          verseNumber = 1;
+          chapterNumber = parseInt(refToRemove.textContent);
+        }
         if (refToRemove.classList.contains("versenum")) {
-          verseNumber = refToRemove.textContent;
+          verseNumber = parseInt(refToRemove.textContent);
         }
         refToRemove.parentNode.removeChild(refToRemove);
       }
@@ -97,13 +108,15 @@ class BibleGatewayAPI {
         }
       }
 
-      // If we have no verse number -- we may in in a verse that is indented but not a new one
+      // If we have no verse number -- or it is the same as the pervious lines verse number,
+      // we may be in a verse that is indented and is not a new one
       // Simply append it to the previous
-      if ((!verseNumber || verseNumber <= 0) && verses.length > 0) {
+      if ((!verseNumber || verseNumber <= 0 || oldVerseNumber == verseNumber) && verses.length > 0) {
         verses[verses.length - 1].textBlocks.push(...textBlocks);
         verses[verses.length - 1].text += text.replace(/\s{2,}/g, ' ');
       } else {
-        verses.push({textBlocks, text, verseNumber});
+        // Otherwise it must be a new verse -- add it
+        verses.push({textBlocks, text, verseNumber, chapterNumber, fullRef : `${chapterNumber}:${verseNumber} ${searchRef.replace(/[0-9]/g, '')}`});
       }
     }
 
