@@ -18,15 +18,10 @@ class BibleGatewayAPI {
   private parse: Function = null;
 
   constructor() {
-    if (typeof DOMParser !== "undefined") {
-      this.parse = (content: string) =>
-        new DOMParser().parseFromString(content, "text/html");
-    } else {
       this.parse = (content: string) => {
         const { JSDOM } = require("jsdom");
         const { document } = new JSDOM(content).window;
         return document;
-      };
     }
   }
 
@@ -43,7 +38,12 @@ class BibleGatewayAPI {
 
     const document = this.parse(result.data);
 
-    const searchRef = document.querySelector(".dropdown-display-text").textContent;
+    const searchRefElement = document.querySelector(".dropdown-display-text");
+    if (!searchRefElement) {
+      // Scripture not found
+      return Promise.reject({ error : `Scripture not found, search: ${query}, version : ${version}` });
+    }
+    const searchRef = searchRefElement.textContent;
 
     // Get span text elements
     let elements = document.querySelectorAll("p > span");
@@ -113,7 +113,7 @@ class BibleGatewayAPI {
       // Simply append it to the previous
       if ((!verseNumber || verseNumber <= 0 || oldVerseNumber == verseNumber) && verses.length > 0) {
         verses[verses.length - 1].textBlocks.push(...textBlocks);
-        verses[verses.length - 1].text += text.replace(/\s{2,}/g, ' ');
+        verses[verses.length - 1].text += "<br>" + text; //.replace(/\s{2,}/g, ' ')
       } else {
         // Otherwise it must be a new verse -- add it
         verses.push({textBlocks, text, verseNumber, chapterNumber, fullRef : `${chapterNumber}:${verseNumber} ${searchRef.replace(/[0-9]/g, '')}`});
@@ -121,7 +121,7 @@ class BibleGatewayAPI {
     }
 
     if (verses.length === 0) {
-      throw new Error("Could not find verse");
+      return Promise.reject({ error : `Scripture not found, search: ${query}, version : ${version}` });
     }
 
     return Promise.resolve({ searchRef, verses });
