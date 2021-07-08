@@ -11,7 +11,10 @@ interface BibleVerseResult {
   text : string,
   chapterNumber? : number,
   verseNumber : number,
+  verseNumberString : string,
   fullRef? : string,
+  startOfNewParagraph? : boolean,
+  verseHeading? : string
 }
 
 class BibleGatewayAPI {
@@ -53,6 +56,7 @@ class BibleGatewayAPI {
     let chapterNumber;
 
     let verseNumber = 1;
+    let verseNumberString = "";
 
     // Iterate over the verses
     for (let i = 0; i < elements.length; i++) {
@@ -73,12 +77,23 @@ class BibleGatewayAPI {
         }
         if (refToRemove.classList.contains("versenum")) {
           verseNumber = parseInt(refToRemove.textContent);
+          // Dosent seem to get the msg verses correctly yet
+          verseNumberString = refToRemove.textContent;
         }
         refToRemove.parentNode.removeChild(refToRemove);
       }
 
+      // Is the current verse the start of a new paragraph?
+      // Are we the first child span tag of the parent p element?
+      // If so lets set it
+      let startOfNewParagraph = textElement.parentElement.querySelector("span") == textElement;
+
+      // Is this a poetry section?
+      // If so we need to intent each new verse
+      let isPoetry = textElement.parentElement.parentElement.classList.contains("poetry");
+
       let text = textElement.textContent;
-      let textBlocks : Array<{text : string, woj : boolean, debug? : string}> = [{text : text, woj : false }];
+      let textBlocks : Array<{text : string, woj : boolean, startOfNewParagraph : boolean, isPoetry : boolean, debug? : string}> = [{text : text, woj : false, startOfNewParagraph,  isPoetry}];
       let indexText = 0;
 
       let debug = "";
@@ -98,25 +113,28 @@ class BibleGatewayAPI {
         }
         // Push the woj text to the next item in the array
         // Remove extra whitespaces
-        textBlocks.push({text : wojElement.textContent.replace(/\s{2,}/g, ' '), woj : true, debug});
+        textBlocks.push({text : wojElement.textContent, woj : true, debug, startOfNewParagraph : false, isPoetry : false});
         // Push any remaining text after it to deal with next, if any
         // Set the indexText to this new index so we can go from there next
-        let nextTextToProcess = tempText.slice(indexStart + toSearchFor.length).replace(/\s{2,}/g, ' ');
+        let nextTextToProcess = tempText.slice(indexStart + toSearchFor.length);
         if (nextTextToProcess.length > 0) {
-          let newLength = textBlocks.push({text : nextTextToProcess, woj : false});
+          let newLength = textBlocks.push({text : nextTextToProcess, woj : false, startOfNewParagraph : false, isPoetry : false});
           indexText = newLength - 1;
         }
       }
+
+      // Is there a verse heading?
+      let verseHeading = textElement.parentElement.previousElementSibling && textElement.parentElement.previousElementSibling.tagName && textElement.parentElement.previousElementSibling.tagName.toLowerCase() == "h3" ? textElement.parentElement.previousElementSibling.textContent : undefined;
 
       // If we have no verse number -- or it is the same as the pervious lines verse number,
       // we may be in a verse that is indented and is not a new one
       // Simply append it to the previous
       if ((!verseNumber || verseNumber <= 0 || oldVerseNumber == verseNumber) && verses.length > 0) {
         verses[verses.length - 1].textBlocks.push(...textBlocks);
-        verses[verses.length - 1].text += "<br>" + text; //.replace(/\s{2,}/g, ' ')
+        verses[verses.length - 1].text += text; //.replace(/\s{2,}/g, ' ')
       } else {
         // Otherwise it must be a new verse -- add it
-        verses.push({textBlocks, text, verseNumber, chapterNumber, fullRef : `${chapterNumber}:${verseNumber} ${searchRef.replace(/[0-9]/g, '')}`});
+        verses.push({textBlocks, text, verseNumber, verseNumberString, chapterNumber, fullRef : `${chapterNumber}:${verseNumber} ${searchRef.replace(/[0-9]/g, '')}`, startOfNewParagraph, verseHeading});
       }
     }
 
